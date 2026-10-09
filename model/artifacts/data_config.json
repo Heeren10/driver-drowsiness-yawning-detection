@@ -1,0 +1,49 @@
+{
+  "created": "2026-10-01",
+  "dataset": "https://www.kaggle.com/datasets/serenaraju/yawn-eye-dataset-new",
+  "classes": [
+    "Closed",
+    "Open",
+    "no_yawn",
+    "yawn"
+  ],
+  "img_size": 128,
+  "channels": 3,
+  "color_mode": "rgb",
+  "resize": "bilinear, square (aspect ratio not preserved)",
+  "normalization": "x / 255 via a Rescaling layer inside the model -> feed raw 0-255 RGB at inference",
+  "val_split": 0.15,
+  "seed": 42,
+  "paths": {
+    "train": "data/processed/train",
+    "val": "data/processed/val",
+    "test": "data/processed/test"
+  },
+  "counts": {
+    "train": {
+      "Closed": 524,
+      "Open": 524,
+      "no_yawn": 524,
+      "yawn": 524
+    },
+    "val": {
+      "Closed": 93,
+      "Open": 93,
+      "no_yawn": 92,
+      "yawn": 93
+    },
+    "test": {
+      "Closed": 109,
+      "Open": 109,
+      "no_yawn": 109,
+      "yawn": 106
+    }
+  },
+  "near_duplicate_test_images_in_train": {
+    "threshold_bits": 10,
+    "Closed": 0,
+    "Open": 0,
+    "no_yawn": 50,
+    "yawn": 52
+  }
+}
