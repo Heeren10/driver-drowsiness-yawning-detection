@@ -1,0 +1,10 @@
+# Model notebooks — Python 3.12. Keras 3.13 matches Google Colab, so .keras files load in both places.
+tensorflow==2.21.0
+keras==3.13.2
+numpy==2.5.3
+scikit-learn==1.9.1
+matplotlib==3.11.2
+kagglehub==1.0.2
+notebook==7.6.3
+nbconvert==7.17.1
+ipykernel==7.4.0

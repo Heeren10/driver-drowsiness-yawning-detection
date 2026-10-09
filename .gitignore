@@ -1,0 +1,31 @@
+# Environments & secrets
+.venv/
+kaggle.json
+.env
+
+# Data (download from Kaggle)
+data/
+
+# Python / Jupyter
+__pycache__/
+.ipynb_checkpoints/
+
+# Frontend (later)
+node_modules/
+dist/
+
+# User test photos (personal)
+/WIN_*.jpg
+
+# Playwright MCP output (browser tests)
+.playwright-mcp/
+
+# Private working notes (kept local)
+CLAUDE.md
+BUILDLOGS.md
+PLAN.md
+
+# Experiment outputs: personal photos + duplicate model copy
+experiments/yawn_mediapipe/user_photos_landmarks.png
+experiments/yawn_mediapipe/face_landmarker.task
+PUSH_PLAN.md
