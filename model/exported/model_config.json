@@ -1,0 +1,31 @@
+{
+  "exported": "2026-10-02",
+  "source_model": "model/saved_models/custom_cnn.keras",
+  "model_file": "drowsiness_cnn.keras",
+  "classes": [
+    "Closed",
+    "Open",
+    "no_yawn",
+    "yawn"
+  ],
+  "img_size": 128,
+  "color_mode": "rgb",
+  "resize": "tf.image.resize(..., method='bilinear') on the full image to img_size x img_size (same as training)",
+  "input_range": "raw 0-255 float32, shape (batch, img_size, img_size, 3); the model rescales internally",
+  "eye_classes": [
+    "Closed",
+    "Open"
+  ],
+  "yawn_classes": [
+    "no_yawn",
+    "yawn"
+  ],
+  "tensorflow": "2.21.0",
+  "keras": "3.13.2",
+  "test_metrics": {
+    "accuracy": 0.9861,
+    "f1_macro": 0.9861,
+    "accuracy_leak_free": 0.9849,
+    "cpu_latency_ms": 3.25
+  }
+}

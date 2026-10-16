@@ -1,0 +1,231 @@
+<!doctype html>
+<!--
+  Minimal TEST UI for the backend (not the final frontend).
+  Run:  1) backend:  cd backend   then  ..\.venv\Scripts\uvicorn main:app --port 8000
+        2) this page: cd test_frontend  then  ..\.venv\Scripts\python -m http.server 5173 --bind 127.0.0.1
+        3) open http://127.0.0.1:5173   (must be http://, not a file:// double-click — webcam + CORS need it)
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Drowsiness Test UI</title>
+<link rel="icon" href="data:,">
+<style>
+  :root { --bg:#0f1115; --panel:#181b22; --line:#2a2f3a; --text:#e8e8ea; --muted:#9aa0a6;
+          --green:#22c55e; --yellow:#eab308; --orange:#f97316; --red:#ef4444; --grey:#6b7280; }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:15px/1.5 system-ui, "Segoe UI", sans-serif; }
+  header { display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap;
+           padding:14px 20px; border-bottom:1px solid var(--line); }
+  h1 { font-size:18px; margin:0; }  h2 { font-size:15px; margin:0 0 10px; color:var(--muted); font-weight:600; }
+  #health { font-size:13px; color:var(--green); }  #health.bad { color:var(--red); }
+  main { display:grid; grid-template-columns: minmax(0,1.3fr) minmax(0,1fr); gap:16px; padding:16px 20px; }
+  .panel { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px; }
+  .wide { grid-column: 1 / -1; }
+  .media { position:relative; background:#000; border-radius:8px; overflow:hidden; aspect-ratio:4/3; }
+  .media video, .media canvas { position:absolute; inset:0; width:100%; height:100%; object-fit:contain; transform:scaleX(-1); }
+  .controls { display:flex; flex-wrap:wrap; gap:10px 16px; margin-top:12px; align-items:center; color:var(--muted); font-size:14px; }
+  input[type=number] { width:72px; background:#0b0d11; color:var(--text); border:1px solid var(--line); border-radius:6px; padding:4px 6px; }
+  button { background:#2563eb; color:#fff; border:0; border-radius:8px; padding:8px 16px; font-weight:600; cursor:pointer; }
+  button.stop { background:var(--grey); }
+  button.alarm { width:100%; margin-top:10px; padding:12px; font-size:16px; background:var(--red); }
+  button:disabled { background:var(--line); color:var(--muted); cursor:default; }
+  .status { font-size:28px; font-weight:700; text-align:center; padding:18px; border-radius:10px; color:#0b0d11; }
+  .green { background:var(--green); } .yellow { background:var(--yellow); } .orange { background:var(--orange); }
+  .grey { background:var(--grey); color:var(--text); } .red { background:var(--red); color:#fff; animation:pulse .6s infinite alternate; }
+  @keyframes pulse { to { opacity:.55; } }
+  dl { display:grid; grid-template-columns:auto 1fr; gap:4px 14px; margin:14px 0 0; font-size:14px; }
+  dt { color:var(--muted); }  dd { margin:0; font-variant-numeric:tabular-nums; }
+  ol { list-style:none; padding:0; margin:8px 0 0; font-size:13px; max-height:220px; overflow:auto; font-variant-numeric:tabular-nums; }
+  ol li { padding:3px 0; border-bottom:1px solid var(--line); color:var(--muted); }
+  .upload { display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:16px; align-items:start; }
+  #uploadCanvas { width:100%; border-radius:8px; background:#000; }
+  pre { background:#0b0d11; border:1px solid var(--line); border-radius:8px; padding:10px; font-size:12px; overflow:auto; margin:10px 0 0; }
+  @media (max-width: 800px) { main, .upload { grid-template-columns:1fr; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Driver Drowsiness — Test UI</h1>
+  <span id="health">checking backend…</span>
+</header>
+
+<main>
+  <section class="panel">
+    <h2>Live webcam</h2>
+    <div class="media"><video id="video" autoplay playsinline muted></video><canvas id="overlay"></canvas></div>
+    <div class="controls">
+      <button id="camBtn">Start webcam</button>
+      <label>Frame every <input id="interval" type="number" min="250" max="3000" step="250" value="1000"> ms</label>
+      <label>Eyes-closed alert after <input id="closedSec" type="number" min="0.5" max="10" step="0.5" value="2"> s</label>
+      <label>Yawn after <input id="yawnSec" type="number" min="1" max="8" step="0.5" value="3"> s</label>
+      <label><input id="mute" type="checkbox"> Mute sound</label>
+    </div>
+  </section>
+
+  <section class="panel">
+    <h2>Status</h2>
+    <div id="status" class="status grey">Idle</div>
+    <button id="stopAlarm" class="alarm" disabled>Stop alarm</button>
+    <dl id="details"></dl>
+    <h2 style="margin-top:16px">Recent frames</h2>
+    <ol id="log"></ol>
+  </section>
+
+  <section class="panel wide">
+    <h2>Upload an image</h2>
+    <div class="upload">
+      <div>
+        <input id="file" type="file" accept="image/*">
+        <label class="controls"><input id="detectFace" type="checkbox" checked> Detect face (untick for a cropped eye image)</label>
+        <canvas id="uploadCanvas" width="640" height="360"></canvas>
+      </div>
+      <div><div id="uploadStatus" class="status grey">No image yet</div><pre id="uploadResult"></pre></div>
+    </div>
+  </section>
+</main>
+
+<script>
+// Backend address (override for testing with ?api=http://127.0.0.1:8001).
+// Not "localhost": on Windows that adds ~2 s to every request.
+const API = new URLSearchParams(location.search).get("api") || "http://127.0.0.1:8000";
+const $ = (id) => document.getElementById(id);
+const sessionId = "web-" + Math.random().toString(36).slice(2, 10);
+const grab = document.createElement("canvas");  // off-screen canvas for webcam frames
+let stream = null, timer = null, busy = false, audio = null, siren = null, lastYawnCount = 0;
+let alarmStopped = false;  // "Stop alarm" silences the current alert; re-arms once the eyes open again
+
+// ---------- backend check ----------
+fetch(API + "/health").then((r) => r.json())
+  .then((h) => { $("health").textContent = `backend OK · ${h.model} · test accuracy ${(h.test_accuracy * 100).toFixed(1)}%`; })
+  .catch(() => { $("health").textContent = `backend NOT reachable at ${API} — is uvicorn running?`; $("health").className = "bad"; });
+
+// ---------- sound (Web Audio API, no files) ----------
+const ctx = () => (audio ??= new AudioContext());
+function beep(freq = 880, ms = 300) {
+  if ($("mute").checked) return;
+  const a = ctx(), osc = a.createOscillator(), gain = a.createGain();
+  osc.frequency.value = freq; gain.gain.value = 0.2;
+  osc.connect(gain).connect(a.destination); osc.start(); osc.stop(a.currentTime + ms / 1000);
+}
+function setSiren(on) {
+  on = on && !$("mute").checked;
+  if (on && !siren) {  // sawtooth tone swept up and down by a slow oscillator = siren
+    const a = ctx(), osc = a.createOscillator(), lfo = a.createOscillator(), depth = a.createGain(), gain = a.createGain();
+    osc.type = "sawtooth"; osc.frequency.value = 900; lfo.frequency.value = 1.5; depth.gain.value = 350; gain.gain.value = 0.25;
+    lfo.connect(depth).connect(osc.frequency); osc.connect(gain).connect(a.destination);
+    osc.start(); lfo.start(); siren = [osc, lfo];
+  } else if (!on && siren) { siren.forEach((n) => n.stop()); siren = null; }
+  $("stopAlarm").disabled = !siren;
+}
+$("mute").onchange = () => setSiren(false);
+$("stopAlarm").onclick = () => { alarmStopped = true; setSiren(false); };
+
+// ---------- display ----------
+function statusOf(r) {
+  if (!r.face_detected) return ["No face", "grey"];
+  if (r.drowsy_alert) return ["DROWSY ALERT!", "red"];
+  if (r.yawning) return ["Yawning", "orange"];
+  if (r.yawn_state === "yawn" && r.yawning === undefined) return ["Mouth wide open (yawn)", "orange"];
+  if (r.eye_state === "Closed") return ["Eyes closed", "yellow"];
+  return ["Eyes open", "green"];
+}
+function setStatus(el, r) { const [text, cls] = statusOf(r); el.textContent = text; el.className = "status " + cls; return text; }
+const pct = (v) => (v == null ? "—" : (v * 100).toFixed(1) + " %");
+
+function showDetails(r) {
+  const rows = [
+    ["Eyes (CNN)", r.eye_state ? `${r.eye_state} · ${pct(r.eye_confidence)}` : "—"],
+    ["Mouth open ratio", r.mouth_open_ratio ?? "—"],
+    ["Eyes closed for", `${r.closed_duration_sec} s (alert at ${$("closedSec").value} s)`],
+    ["Mouth open for", `${r.yawn_duration_sec} s (yawn at ${$("yawnSec").value} s)`],
+    ["Yawns this session", r.yawn_count],
+    ["PERCLOS (60 s)", pct(r.perclos)],
+    ["Server time / round trip", `${r.latency_ms} ms / ${r.round_trip_ms} ms`],
+  ];
+  $("details").innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join("");
+}
+function addLog(text, r) {
+  const li = document.createElement("li");
+  li.textContent = `${new Date().toLocaleTimeString()}  ${text}  · eyes ${r.eye_state ?? "—"}  · mouth ${r.mouth_open_ratio ?? "—"}`;
+  $("log").prepend(li);
+  while ($("log").children.length > 20) $("log").lastChild.remove();
+}
+function drawBox(canvas, r, color) {  // canvas pixel size = analysed image size, so the box lines up
+  const g = canvas.getContext("2d");
+  if (!r.face_box) return;
+  const [x, y, w, h] = r.face_box;
+  g.strokeStyle = color; g.lineWidth = Math.max(2, canvas.width / 200); g.strokeRect(x, y, w, h);
+}
+const colorOf = (r) => ({ green: "#22c55e", yellow: "#eab308", orange: "#f97316", red: "#ef4444", grey: "#6b7280" })[statusOf(r)[1]];
+
+// ---------- webcam ----------
+async function sendFrame() {
+  const v = $("video");
+  if (busy || !stream || !v.videoWidth) return;  // skip a tick rather than queue requests
+  busy = true;
+  grab.width = 640; grab.height = Math.round(v.videoHeight * 640 / v.videoWidth);
+  grab.getContext("2d").drawImage(v, 0, 0, grab.width, grab.height);
+  const t0 = performance.now();
+  try {
+    const res = await fetch(API + "/predict-stream", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ session_id: sessionId, image: grab.toDataURL("image/jpeg", 0.8),
+                             closed_threshold_sec: +$("closedSec").value, yawn_threshold_sec: +$("yawnSec").value }),
+    });
+    const r = await res.json();
+    if (!res.ok) throw new Error(typeof r.detail === "string" ? r.detail : JSON.stringify(r.detail));
+    r.round_trip_ms = Math.round(performance.now() - t0);
+    const text = setStatus($("status"), r);
+    showDetails(r); addLog(text, r);
+    const ov = $("overlay"); ov.width = grab.width; ov.height = grab.height; drawBox(ov, r, colorOf(r));
+    if (!r.drowsy_alert) alarmStopped = false;  // eyes opened (or face lost): next closure alarms again
+    setSiren(r.drowsy_alert && !alarmStopped);  // siren keeps sounding while the eyes stay closed >= threshold
+    if (r.yawn_count > lastYawnCount) { beep(660, 350); setTimeout(() => beep(660, 350), 450); }
+    lastYawnCount = r.yawn_count;
+  } catch (e) {
+    $("status").textContent = "Error: " + e.message; $("status").className = "status grey"; setSiren(false);
+  } finally { busy = false; }
+}
+function restartTimer() { clearInterval(timer); if (stream) timer = setInterval(sendFrame, +$("interval").value); }
+$("interval").onchange = restartTimer;
+
+$("camBtn").onclick = async () => {
+  if (stream) {  // stop
+    clearInterval(timer); stream.getTracks().forEach((t) => t.stop()); stream = null; setSiren(false);
+    $("camBtn").textContent = "Start webcam"; $("camBtn").className = ""; $("status").textContent = "Idle"; $("status").className = "status grey";
+    return;
+  }
+  ctx().resume();  // browsers only allow sound after a click
+  try {
+    stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+  } catch (e) { $("status").textContent = "Webcam blocked: " + e.message; return; }
+  $("video").srcObject = stream;
+  $("camBtn").textContent = "Stop webcam"; $("camBtn").className = "stop";
+  restartTimer();
+};
+
+// ---------- upload ----------
+$("file").onchange = async () => {
+  const file = $("file").files[0];
+  if (!file) return;
+  ctx().resume();
+  const img = await createImageBitmap(file);
+  const c = $("uploadCanvas"); c.width = img.width; c.height = img.height; c.getContext("2d").drawImage(img, 0, 0);
+  $("uploadStatus").textContent = "Analysing…"; $("uploadStatus").className = "status grey";
+  const form = new FormData(); form.append("file", file);
+  try {
+    const res = await fetch(`${API}/predict?detect_face=${$("detectFace").checked}`, { method: "POST", body: form });
+    const r = await res.json();
+    $("uploadResult").textContent = JSON.stringify(r, null, 2);
+    if (!res.ok) throw new Error(typeof r.detail === "string" ? r.detail : "request failed");
+    if ($("detectFace").checked) setStatus($("uploadStatus"), r);
+    else { $("uploadStatus").textContent = `${r.prediction} · ${pct(r.confidence)}`; $("uploadStatus").className = "status green"; }
+    drawBox(c, r, colorOf(r));
+    if (r.eye_state === "Closed" || r.yawn_state === "yawn") beep(880, 500);  // single beep = something detected
+  } catch (e) { $("uploadStatus").textContent = "Error: " + e.message; $("uploadStatus").className = "status grey"; }
+};
+</script>
+</body>
+</html>

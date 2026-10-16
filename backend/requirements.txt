@@ -1,0 +1,11 @@
+# FastAPI inference service — Python 3.12
+tensorflow==2.21.0
+keras==3.13.2
+numpy==2.5.3
+fastapi==0.142.2
+uvicorn[standard]==0.54.0
+python-multipart==0.0.32
+# Face landmarks (eye crops + mouth opening). mediapipe installs OpenCV 5 (opencv-contrib-python);
+# do NOT also install opencv-python / opencv-python-headless — two OpenCV packages clash.
+mediapipe==1.0.1
+opencv-contrib-python==5.0.0.93
